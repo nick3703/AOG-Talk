@@ -8,6 +8,17 @@ output: ioslides_presentation
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
+require(tidyverse)
+require(tidytext)
+
+require(googlesheets)
+
+
+library(sentimentr)
+require(Rcpp)
+require(later)
+require(packrat) 
+
 ```
 
 
@@ -97,4 +108,121 @@ summarized.data %>% ggplot(aes(x=`month(visit_date)`,y=avg))+
 - Let's say trial is done in Month 9
 - Does this necessarily mean our results are valid for December?
 
-## 
+## What are people saying about you?
+
+- Assumes metric we are interested in is positive tweets that mention WPAOG
+
+- Hypothesis:  If I do X, then people will tweet more positively about WPAOG
+
+```{r,message=FALSE}
+added = read_csv("AOGTweets.csv")
+
+textcleaned = added %>%
+  unnest_tokens(word, text)
+
+cleanedarticle = anti_join(textcleaned,stop_words, by = "word") %>%
+  select(line,word,screenname,time,followerscount,favoritescount, searchterm)
+
+```
+- Seperated tweets into individual words
+
+## What are people saying about you?
+
+```{r,echo=FALSE,message=FALSE}
+added = read_csv("AOGTweets.csv")
+
+textcleaned = added %>%
+  unnest_tokens(word, text)
+
+cleanedarticle = anti_join(textcleaned,stop_words, by = "word") %>% select(line,word,screenname,time,followerscount,favoritescount, searchterm) 
+
+converted = added %>%
+      select(-lat,-lng,-coords_coords,-bbox_coords,-geo_coords) %>%
+      mutate(text = iconv(text, "UTF-8", "UTF-8",sub=''))
+    
+senttest = get_sentences(converted$text)
+scores_by = sentiment_by(senttest)
+
+workingdata = converted %>%
+    mutate(polaritysent = scores_by$ave_sentiment)%>%
+   mutate(time = round_date(time, unit = "day")) %>%
+   mutate(dayofweek = date(time)) %>%
+   mutate(influencescore = favoritescount*polaritysent)
+
+
+dailysentscore = workingdata %>%
+   group_by(dayofweek) %>%
+   summarise(AverageDailySentiment = average_downweighted_zero(polaritysent)) %>%
+   mutate(AverageDailySentiment = round(AverageDailySentiment,4))
+
+dailysentscore
+```
+
+
+## Most Influential Tweeters
+
+```{r,echo=FALSE,message=FALSE}
+
+InfluencialTweets = workingdata %>%
+  top_n(3,influencescore) %>%
+  bind_rows(
+    workingdata %>%
+      top_n(3,influencescore)
+  ) %>%
+  select(screenname,text,followerscount,favoritescount,polaritysent,influencescore)
+
+library(kableExtra)
+kable(InfluencialTweets) %>% kable_styling(font_size = 10) 
+```
+
+## Most Negatively Influential Tweeters
+
+
+```{r,echo=FALSE,message=FALSE}
+
+InfluencialTweets = workingdata %>%
+  top_n(-3,influencescore) %>%
+  bind_rows(
+    workingdata %>%
+      top_n(-3,influencescore)
+  ) %>%
+  select(screenname,text,followerscount,favoritescount,polaritysent,influencescore)
+
+library(kableExtra)
+kable(InfluencialTweets) %>% kable_styling(font_size = 10) 
+```
+
+## It's all relative...
+- Scores are best observed over time
+- Influence score is 'man-made'.  Could other things matter?
+- Does this support a decision or is it just nice to know?
+- What does 'normal' look like?  Is December 12th worse or was there just a single person who tweeted negatively that day?
+
+## Questions need a baseline
+
+```{r,message=FALSE,echo=FALSE}
+trends<-read_csv("trends2.csv")
+trends <- trends %>% mutate(dayofweek=ymd(Month,truncated = 1))%>%
+  mutate(Response=`West Point Army: (United States)`)%>%
+  select(Response,dayofweek)
+trends %>% ggplot(aes(x=dayofweek,y=Response))+geom_line(lwd=1,color="red")+ggtitle("Google Search History Over Time")
+```
+## What does normal look like?
+
+```{r}
+gah<-decompose(ts(trends$Response,freq=364/12,
+                  start=decimal_date(ymd("2004-01-01"))))
+plot(gah)
+```
+- Where are we most abnormal
+
+```{r,echo=FALSE}
+trends[which(gah$random==max(na.omit(gah$random))),]
+```
+<center>
+![](ArmyNavy.PNG){width=450px}
+</center>
+
+```{r}
+trends %>% mutate(err=gah$random)%>% filter(err > 30)
+```
