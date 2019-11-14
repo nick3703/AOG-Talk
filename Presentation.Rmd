@@ -1,0 +1,13 @@
+---
+title: "Data Science for AOG"
+author: "LTC Nicholas Clark"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Science for AOG
+
+## What is Data Science
