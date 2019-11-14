@@ -8,6 +8,8 @@ output: ioslides_presentation
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Data Science for AOG
 
 ## What is Data Science
+<center>
+![Drew Conway's Venn Diagram of data science](VennDiag.png){width=450px}
+</center>
